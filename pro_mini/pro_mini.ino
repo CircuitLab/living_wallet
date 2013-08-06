@@ -8,7 +8,7 @@ SFEMP3Shield MP3player;
 
 int debugPin = 13;
 
-int delayTime = 2000;
+int delayTime = 500;
 
 int command;
 
@@ -18,14 +18,16 @@ int command;
 #define COMMAND_NEUTRAL 0x00
 #define COMMAND_ENABLE_CONSUME 0x10
 #define COMMAND_DISABLE_CONSUME 0x20
-#define COMMAND_CAUGHT 0x30
+#define COMMAND_AVOID 0x30
+#define COMMAND_CAUGHT 0x40
 
 volatile byte prevCommand;
 volatile byte currentCommand;
 
-String trackNamesOnEnableConsume[] = { "track001" };
-String trackNamesOnDisableConsume[] = { "track003", "track004" };
+char* trackNamesOnEnableConsume[] = { "track1_1.mp3" };
+char* trackNamesOnCaught[] = { "track2_1.mp3", "track3_1.mp3" };
 
+uint8_t currentStatus;
 volatile byte state;
 
 void setup()
@@ -38,13 +40,15 @@ void setup()
   if(!sd.begin(SD_SEL, SPI_HALF_SPEED)) sd.initErrorHalt();
   if(!sd.chdir("/")) sd.errorHalt("sd.chdir");
   
-  uint8_t result = MP3player.begin();
-  if (0 != result) {
+  currentStatus = MP3player.begin();
+  if (0 != currentStatus) {
     Serial.print(F("Error code: "));
-    Serial.print(result);
+    Serial.print(currentStatus);
     Serial.println(F(" when trying to start MP3 player"));
     
-    if(6 == result) {
+    delayTime = 100;
+    
+    if(6 == currentStatus) {
       Serial.println(F("Warning: patch file not found, skipping."));
       Serial.println(F("Use the \"d\" command to verify SdCard can be read"));
     }
@@ -62,7 +66,11 @@ void setup()
 
 void loop()
 {
-  debugBlink();
+  if (0 != currentStatus) {
+    debugBlink();
+  }
+  
+  delay(10);
 }
 
 void debugBlink()
@@ -83,6 +91,8 @@ void serialEvent()
         currentCommand = COMMAND_ENABLE_CONSUME;
       } else if (COMMAND_DISABLE_CONSUME == command) {
         currentCommand = COMMAND_DISABLE_CONSUME;
+      } else if (COMMAND_AVOID == command) {
+        currentCommand = COMMAND_AVOID;
       } else if (COMMAND_CAUGHT == command) {
         currentCommand = COMMAND_CAUGHT;
       } else {
@@ -92,21 +102,26 @@ void serialEvent()
       if (prevCommand != currentCommand) {
         uint8_t result;
         
+        if (MP3player.isPlaying()) {
+          MP3player.stopTrack();
+          delay(10);
+        }
+        
         if (COMMAND_ENABLE_CONSUME == currentCommand) {
-          result = MP3player.playMP3("song_01.mp3", 0);
+          result = MP3player.playMP3(trackNamesOnEnableConsume[0], 0);
         } else if (COMMAND_DISABLE_CONSUME == currentCommand) {
-          result = MP3player.playMP3("dont_touch_01.mp3", 0);
+          result = 0;
+        } else if (COMMAND_AVOID == currentCommand) {
+          result = 0;
         } else if (COMMAND_CAUGHT == currentCommand) {
-          result = MP3player.playMP3("help_01.mp3", 0);
+          result = MP3player.playMP3(trackNamesOnCaught[random(2)], 0);
         } else {
           MP3player.stopTrack();
           result = 0;
         }
         
         if (0 != result) {
-          Serial.print(F("Error code: "));
-          Serial.print(result);
-          Serial.println(F(" when trying to play track"));
+          Serial.print((char)result);
         }
       }
       
@@ -117,18 +132,4 @@ void serialEvent()
       break;
     }
   }
-//  if (1 < Serial.available()) {
-//    if (START_BYTE == Serial.read()) {
-//      if (COMMAND_ENABLE_CONSUME == Serial.read()) {
-//        delayTime = 250;
-//        Serial.println("enable consume");
-//      } else if (COMMAND_DISABLE_CONSUME == Serial.read()) {
-//        delayTime = 500;
-//        Serial.println("disable consume");
-//      } else if (COMMAND_CAUGHT == Serial.read()) {
-//        delayTime = 1000;`
-//        Serial.println("caught");
-//      }
-//    }
-//  }
 }

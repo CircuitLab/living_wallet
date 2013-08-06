@@ -32,6 +32,8 @@
 #define STATE_NEUTRAL 0
 #define STATE_ENABLE_CONSUME 1
 #define STATE_DISABLE_CONSUME 2
+#define STATE_AVOID 3
+#define STATE_CAUGHT 4
 
 // MsTimer2でD3とD11を使用
 
@@ -104,7 +106,8 @@ boolean enableAvoidance = false;
 #define COMMAND_NEUTRAL 0x00
 #define COMMAND_ENABLE_CONSUME 0x10
 #define COMMAND_DISABLE_CONSUME 0x20
-#define COMMAND_CAUGHT 0x30
+#define COMMAND_AVOID 0x30
+#define COMMAND_CAUGHT 0x40
 
 void setup()
 {
@@ -164,7 +167,6 @@ void loop()
   String serialMsg = "";
   while (Serial1.available()) {
     serialMsg += Serial1.read();
-//    Serial.println(Serial1.read());
   }
   
   if (0 != strcmp(serialMsg.c_str(), "")) {
@@ -172,7 +174,7 @@ void loop()
     Serial.println(serialMsg);
   }
   
-  if (STATE_NEUTRAL == currentState) {
+  if (STATE_NEUTRAL == currentState || STATE_ENABLE_CONSUME == currentState || STATE_DISABLE_CONSUME == currentState) {
    moveFront(FRONT_WHEEL_RIGHT, 255, DIRECTION_FORWARD);
     delay(10);
     moveFront(FRONT_WHEEL_LEFT, 255, DIRECTION_FORWARD);
@@ -199,30 +201,21 @@ void loop()
     delay(500);
     stopRear();
 //    delay(100);
-  } else if (STATE_DISABLE_CONSUME == currentState) {
-    if (enableAvoidance) {
-      moveFront(FRONT_WHEEL_RIGHT, 255, DIRECTION_FORWARD);
-      delay(10);
-      moveFront(FRONT_WHEEL_LEFT, 100, DIRECTION_BACK);
-      delay(10);
-      stopFront();
-      
-      moveRear(REAR_WHEEL_RIGHT, 255, DIRECTION_FORWARD);
-      delay(10);
-      moveRear(REAR_WHEEL_LEFT, 100, DIRECTION_BACK);
-      delay(10);
-      stopRear();
-    } else {
-      moveFront(0, 255, 1);
-      moveFront(1, 255, 1);
-      delay(200);
-      stopFront();
-      
-      moveRear(0, 255, 0);
-      moveRear(1, 255, 0);
-      delay(200);
-      stopRear();
-    }
+  } else if (STATE_AVOID == currentState) {
+    moveFront(FRONT_WHEEL_RIGHT, 255, DIRECTION_FORWARD);
+    delay(10);
+    moveFront(FRONT_WHEEL_LEFT, 50, DIRECTION_BACK);
+    delay(10);
+    stopFront();
+    
+    moveRear(REAR_WHEEL_RIGHT, 255, DIRECTION_FORWARD);
+    delay(10);
+    moveRear(REAR_WHEEL_LEFT, 50, DIRECTION_BACK);
+    delay(10);
+    stopRear();
+  } else if (STATE_CAUGHT == currentState) {
+    stopFront();
+    stopRear();
   }
 }
 
@@ -325,12 +318,20 @@ void observeInputs()
   konashiPin5Value = digitalRead(KONASHI_PIN_5);
   irSensorValue = analogRead(IR_SENSOR_PIN);  
   flexSensorValue = analogRead(FLEX_SENSOR_PIN);
-//  Serial.print("IR: ");
-//  Serial.print(irSensorValue);
-//  Serial.print(", FLEX: ");
-//  Serial.print(flexSensorValue);
-//  Serial.print(", STATE: ");
-//  Serial.println(currentState);
+  Serial.print("IR: ");
+  Serial.print(irSensorValue);
+  Serial.print(", FLEX: ");
+  Serial.print(flexSensorValue);
+  Serial.print(", STATE: ");
+  Serial.println(currentState);
+  
+  if (STATE_AVOID == prevState && IR_SENSOR_THRESHOLD > irSensorValue) {
+    currentState = STATE_DISABLE_CONSUME;
+  }
+  
+  if (STATE_CAUGHT == prevState && FLEX_SENSOR_THRESHOLD > flexSensorValue) {
+    currentState = STATE_DISABLE_CONSUME;
+  }
   
   if (LOW == konashiPin4PrevValue && HIGH == konashiPin4Value) {
     currentState = STATE_ENABLE_CONSUME;
@@ -340,6 +341,16 @@ void observeInputs()
     currentState = STATE_DISABLE_CONSUME;
   }
   
+  if (STATE_DISABLE_CONSUME == currentState) {
+    if (IR_SENSOR_THRESHOLD <= irSensorValue) {
+      currentState = STATE_AVOID;
+    }
+    
+    if (FLEX_SENSOR_THRESHOLD <= flexSensorValue) {
+      currentState = STATE_CAUGHT;
+    }
+  }
+  
   if (konashiPin4Value == konashiPin5Value) {
     currentState = STATE_NEUTRAL;
   }
@@ -347,13 +358,29 @@ void observeInputs()
   if (prevState != currentState) {
     Serial1.print((char)START_BYTE);
     
-    if (STATE_ENABLE_CONSUME == currentState) {
-      Serial1.print((char)COMMAND_ENABLE_CONSUME);
-    } else if (STATE_DISABLE_CONSUME == currentState) {
-      Serial1.print((char)COMMAND_DISABLE_CONSUME);
-    } else {
-      // i.e. currentState = STATE_NEUTRAL
-      Serial1.print((char)COMMAND_NEUTRAL);
+    switch (currentState) {
+      case STATE_ENABLE_CONSUME:
+        Serial1.print((char)COMMAND_ENABLE_CONSUME);
+        break;
+        
+       case STATE_DISABLE_CONSUME:
+         Serial1.print((char)COMMAND_DISABLE_CONSUME);
+         break;
+         
+       case STATE_AVOID:
+         Serial1.print((char)COMMAND_AVOID);
+         break;
+         
+       case STATE_CAUGHT:
+         Serial1.print((char)COMMAND_CAUGHT);
+         break;
+         
+       case STATE_NEUTRAL:
+         Serial1.print((char)COMMAND_NEUTRAL);
+         break;
+         
+       default:
+         break;
     }
     
     Serial1.print((char)END_BYTE);
@@ -363,14 +390,4 @@ void observeInputs()
   
   konashiPin4PrevValue = konashiPin4Value;
   konashiPin5PrevValue = konashiPin5Value;
-  
-  if (STATE_DISABLE_CONSUME == currentState && IR_SENSOR_THRESHOLD <= irSensorValue) {
-    enableAvoidance = true;
-  } else {
-    enableAvoidance = false;
-  }
-  
-  if (STATE_DISABLE_CONSUME == currentState && FLEX_SENSOR_THRESHOLD <= flexSensorValue) {
-    playShoutSound();
-  }
 }
