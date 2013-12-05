@@ -34,6 +34,8 @@
 #define STATE_DISABLE_CONSUME 2
 #define STATE_AVOID 3
 #define STATE_CAUGHT 4
+#define STATE_BACK 5
+#define STATE_STOP 6
 
 // MsTimer2でD3とD11を使用
 
@@ -152,7 +154,8 @@ void setup()
     currentState = STATE_ENABLE_CONSUME;
   } else if (HIGH == konashiPin5PrevValue) {
     currentState = STATE_DISABLE_CONSUME;
-  } 
+  }
+ currentState = STATE_STOP; 
   
   prevState = currentState;
   
@@ -216,7 +219,26 @@ void loop()
   } else if (STATE_CAUGHT == currentState) {
     stopFront();
     stopRear();
+  } else if (STATE_BACK == currentState) {
+    moveFront(FRONT_WHEEL_RIGHT, 255, DIRECTION_BACK);
+    delay(10);
+    moveFront(FRONT_WHEEL_LEFT, 255, DIRECTION_BACK);
+    delay(500);
+    stopFront();
+//    delay(100);
+    
+    moveRear(REAR_WHEEL_RIGHT, 255, DIRECTION_BACK);
+    delay(10);;
+    moveRear(REAR_WHEEL_LEFT, 255, DIRECTION_BACK);
+    delay(500);
+    stopRear();
+  } else if (STATE_STOP == currentState) {
+    stopFront();
+    stopRear();
+    delay(500);
   }
+  Serial.print("currentState : ");
+  Serial.println(currentState);
 }
 
 // 前輪を動かす
@@ -298,7 +320,7 @@ void playShoutSound()
 // KONASHIの4ピンを監視する
 void changeStateByKonashi()
 {
-  currentState = HIGH == digitalRead(KONASHI_PIN_5) ? STATE_DISABLE_CONSUME : STATE_ENABLE_CONSUME;
+  currentState = HIGH == digitalRead(KONASHI_PIN_5) ?  STATE_DISABLE_CONSUME  : STATE_ENABLE_CONSUME;
   
   if (HIGH == currentState) {
     Serial.println("consumable");
@@ -351,8 +373,15 @@ void observeInputs()
     }
   }
   
-  if (konashiPin4Value == konashiPin5Value) {
+  if (HIGH == konashiPin5Value && LOW == konashiPin4Value) {
     currentState = STATE_NEUTRAL;
+  } else if (LOW == konashiPin5Value && HIGH == konashiPin4Value) {
+    currentState = STATE_BACK;
+  }
+  
+  if (konashiPin4Value == konashiPin5Value) {
+//    currentState = STATE_NEUTRAL;
+    currentState = STATE_STOP;
   }
   
   if (prevState != currentState) {
