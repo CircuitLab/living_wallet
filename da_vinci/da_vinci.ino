@@ -72,7 +72,7 @@
 volatile int irSensorValue = 0;
 
 #define FLEX_SENSOR_PIN PF0
-#define FLEX_SENSOR_THRESHOLD 700
+#define FLEX_SENSOR_THRESHOLD 750
 volatile int flexSensorValue = 0;
 
 //#define STATE_PIN PF4
@@ -188,22 +188,8 @@ void loop()
     moveRear(REAR_WHEEL_RIGHT, 255, DIRECTION_FORWARD);
     delay(10);;
     moveRear(REAR_WHEEL_LEFT, 255, DIRECTION_FORWARD);
-    delay(500);
+    delay(800);
     stopRear();
-  } else if (STATE_ENABLE_CONSUME == currentState) {
-    moveFront(FRONT_WHEEL_RIGHT, 255, DIRECTION_FORWARD);
-    delay(10);
-    moveFront(FRONT_WHEEL_LEFT, 255, DIRECTION_FORWARD);
-    delay(500);
-    stopFront();
-//    delay(100);
-    
-    moveRear(REAR_WHEEL_RIGHT, 255, DIRECTION_FORWARD);
-    delay(10);;
-    moveRear(REAR_WHEEL_LEFT, 255, DIRECTION_FORWARD);
-    delay(500);
-    stopRear();
-//    delay(100);
   } else if (STATE_AVOID == currentState) {
     moveFront(FRONT_WHEEL_RIGHT, 255, DIRECTION_FORWARD);
     delay(10);
@@ -373,11 +359,13 @@ void observeInputs()
     }
   }
   
+  /*
   if (HIGH == konashiPin5Value && LOW == konashiPin4Value) {
     currentState = STATE_NEUTRAL;
   } else if (LOW == konashiPin5Value && HIGH == konashiPin4Value) {
     currentState = STATE_BACK;
   }
+  */
   
   if (konashiPin4Value == konashiPin5Value) {
 //    currentState = STATE_NEUTRAL;
